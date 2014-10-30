@@ -1,0 +1,17 @@
+Source: syncany-plugin-raid0
+Section: utils
+Priority: extra
+Maintainer: Philipp Heckel <philipp.heckel@gmail.com>
+Build-Depends: bash-completion, debhelper (>= 8.0.0) | debhelper (>= 9.0.0)
+Standards-Version: 3.9.4
+Homepage: https://www.syncany.org
+
+Package: syncany-plugin-raid0
+Architecture: ${pluginDebianArchitecture}
+Depends: ${pluginMiscDepends}, syncany (>= ${pluginAppMinVersion})
+Homepage: https://www.syncany.org/
+Description: RAID0 plugin for Syncany
+ This plugin makes it possible to use two other storage plugins as a 
+ backend for Syncany. Data is distributed evenly among two backends.
+ .
+ The package relies on the original Syncany package.

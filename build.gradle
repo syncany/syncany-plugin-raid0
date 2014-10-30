@@ -1,0 +1,33 @@
+apply plugin: 'java'
+apply plugin: 'eclipse'
+
+configurations {
+	pluginjar
+}
+
+project.ext {
+	pluginId = "raid0"
+	pluginName = "RAID0"
+	pluginVersion = "0.1.13-alpha"	
+	pluginDebianVersion = "1"	
+	pluginDate = new Date()
+	pluginAppMinVersion = "0.1.12-alpha"
+	pluginRelease = rootProject.ext.applicationRelease
+	pluginConflictsWith = ""
+	
+	pluginVersionSnapshot = rootProject.ext.applicationVersionSnapshot
+	pluginVersionFull = "${pluginVersion}${pluginVersionSnapshot}"	
+	pluginNeedsOperatingSystemAndArchitecture = false	
+}
+
+dependencies {
+	compile		project(":syncany-lib")
+	compile		project(":syncany-util")	
+
+	testCompile	project(path: ":syncany-lib", configuration: "tests")      
+	testCompile	project(path: ":syncany-util", configuration: "tests")
+	testCompile	"junit:junit:4.9"
+}
+
+apply from: 'core/gradle/gradle/plugins.jar.gradle'
+apply from: 'core/gradle/gradle/plugins.debian.gradle'
