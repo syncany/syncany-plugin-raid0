@@ -17,10 +17,7 @@
  */
 package org.syncany.plugins.unreliable_local;
 
-import org.syncany.config.Config;
-import org.syncany.plugins.transfer.StorageException;
 import org.syncany.plugins.transfer.TransferPlugin;
-import org.syncany.plugins.transfer.TransferSettings;
 
 /**
  * The unreliable local plugin can be used for test purposes to
@@ -30,19 +27,8 @@ import org.syncany.plugins.transfer.TransferSettings;
  *
  * @author Philipp C. Heckel <philipp.heckel@gmail.com>
  */
-
-public class UnreliableLocalPlugin extends TransferPlugin {
-	public UnreliableLocalPlugin() {
+public class UnreliableLocalTransferPlugin extends TransferPlugin {
+	public UnreliableLocalTransferPlugin() {
 		super("unreliable_local");
-	}
-
-	@Override
-	public UnreliableLocalTransferSettings createEmptySettings() throws StorageException {
-		return new UnreliableLocalTransferSettings();
-	}
-
-	@Override
-	public UnreliableLocalTransferManager createTransferManager(TransferSettings transferSettings, Config config) throws StorageException {
-		return new UnreliableLocalTransferManager((UnreliableLocalTransferSettings) transferSettings, config);
 	}
 }

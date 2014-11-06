@@ -17,10 +17,7 @@
  */
 package org.syncany.plugins.dummy;
 
-import org.syncany.config.Config;
-import org.syncany.plugins.transfer.StorageException;
 import org.syncany.plugins.transfer.TransferPlugin;
-import org.syncany.plugins.transfer.TransferSettings;
 
 /**
  * @author Christian Roth <christian.roth@port17.de>
@@ -29,15 +26,4 @@ public class DummyTransferPlugin extends TransferPlugin {
 	public DummyTransferPlugin() {
 		super("dummy");
 	}
-
-	@Override
-	public TransferSettings createEmptySettings() throws StorageException {
-		return new DummyTransferSettings();
-	}
-
-	@Override
-	public DummyTransferManager createTransferManager(TransferSettings transferSettings, Config config) throws StorageException {
-		return new DummyTransferManager((DummyTransferSettings) transferSettings, config);
-	}
-
 }

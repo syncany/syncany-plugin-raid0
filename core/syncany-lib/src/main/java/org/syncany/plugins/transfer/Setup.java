@@ -25,7 +25,7 @@ import java.lang.annotation.Target;
 /**
  * The {@link org.syncany.plugins.transfer.Setup} annotation alters the initialization process.
  *
- * @see org.syncany.PluginOptions
+ * @see org.syncany.plugins.transfer.TransferPluginOptions
  * @author Christian Roth <christian.roth@port17.de>
  */
 @Target(ElementType.FIELD)
@@ -48,7 +48,12 @@ public @interface Setup {
 	boolean sensitive() default false;
 
 	/**
-	 * @see org.syncany.PluginOptionCallback
+	 * @see org.syncany.plugins.transfer.TransferPluginOptionCallback
 	 */
-	Class<? extends PluginOptionCallback> callback() default PluginOptionCallback.class;
+	Class<? extends TransferPluginOptionCallback> callback() default TransferPluginOptionCallback.class;
+
+	/**
+	 * @see org.syncany.plugins.transfer.TransferPluginOptionConverter
+	 */
+	Class<? extends TransferPluginOptionConverter> converter() default TransferPluginOptionConverter.class;
 }

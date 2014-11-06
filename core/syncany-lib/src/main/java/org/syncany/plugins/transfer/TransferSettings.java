@@ -34,10 +34,8 @@ import org.simpleframework.xml.core.Commit;
 import org.simpleframework.xml.core.Persist;
 import org.simpleframework.xml.core.Validate;
 import org.syncany.config.UserConfig;
-import org.syncany.config.to.UserConfigTO;
 import org.syncany.crypto.CipherSpecs;
 import org.syncany.crypto.CipherUtil;
-import org.syncany.crypto.SaltedSecretKey;
 import org.syncany.plugins.Plugin;
 import org.syncany.plugins.UserInteractionListener;
 import org.syncany.util.ReflectionUtil;
@@ -58,11 +56,11 @@ import com.google.common.base.Objects;
 public abstract class TransferSettings {
 	private static final Logger logger = Logger.getLogger(TransferSettings.class.getName());
 
-	private String lastValidationFailReason;
-	private UserInteractionListener userInteractionListener;
-
 	@Attribute
 	private String type = findPluginId();
+
+	private String lastValidationFailReason;
+	private UserInteractionListener userInteractionListener;
 
 	public UserInteractionListener getUserInteractionListener() {
 		return userInteractionListener;
@@ -71,12 +69,7 @@ public abstract class TransferSettings {
 	public void setUserInteractionListener(UserInteractionListener userInteractionListener) {
 		this.userInteractionListener = userInteractionListener;
 	}
-
-	/**
-	 * Get the {@link org.syncany.plugins.transfer.TransferPlugin}'s id.
-	 *
-	 * @return A string with {@link org.syncany.plugins.transfer.TransferPlugin#getId()}
-	 */
+	
 	public final String getType() {
 		return type;
 	}
@@ -90,7 +83,10 @@ public abstract class TransferSettings {
 	 */
 	public final String getField(String key) throws StorageException {
 		try {
-			Object fieldValueAsObject = this.getClass().getDeclaredField(key).get(this);
+			Field field = this.getClass().getDeclaredField(key);
+			field.setAccessible(true);
+			
+			Object fieldValueAsObject = field.get(this);
 
 			if (fieldValueAsObject == null) {
 				return null;
@@ -218,56 +214,73 @@ public abstract class TransferSettings {
 	}
 
 	@Persist
-	private void encrypt() throws Exception {
-		// TODO [high] This should be in the @Option annotation
+	private void onPersist() throws Exception {
 		Field[] optionFields = ReflectionUtil.getAllFieldsWithAnnotation(this.getClass(), Setup.class);
 
 		for (Field field : optionFields) {
 			field.setAccessible(true);
 
 			if (field.getAnnotation(Encrypted.class) != null) {
-				if (field.getType() != String.class) {
-					throw new StorageException("Invalid use of Encrypted annotation: Only strings can be encrypted/decrypted");
-				}
-
-				InputStream plainInputStream = IOUtils.toInputStream((String) field.get(this));
-				SaltedSecretKey privateKey = UserConfigTO.load(UserConfig.getUserConfigFile()).getConfigEncryptionKey();
-				byte[] encryptedBytes = CipherUtil.encrypt(plainInputStream, CipherSpecs.getDefaultCipherSpecs(), privateKey);
-				field.set(this, StringUtil.toHex(encryptedBytes)); // the field's now encrypted
+				encryptField(field);				
 			}
 		}
+	}
 
-		logger.log(Level.FINE, "Encrypted transfer setting values");
+	private void encryptField(Field field) throws Exception {
+		logger.log(Level.INFO, "Encrypting field " + field + " ...");
+		
+		if (field.getType() != String.class) {
+			throw new StorageException("Invalid use of Encrypted annotation: Only strings can be encrypted/decrypted");
+		}
+
+		String fieldPlaintextStr = (String) field.get(this);		
+		InputStream fieldPlaintextInputStream = IOUtils.toInputStream(fieldPlaintextStr);
+		byte[] fieldEncryptedBytes = CipherUtil.encrypt(fieldPlaintextInputStream, CipherSpecs.getDefaultCipherSpecs(), UserConfig.getConfigEncryptionKey());
+		
+		field.set(this, StringUtil.toHex(fieldEncryptedBytes)); // The field is now encrypted
 	}
 
 	@Commit
-	private void decrypt() throws Exception {
-		// TODO [high] This should be in the @Option annotation
+	private void onCommit() throws Exception {
 		Field[] optionFields = ReflectionUtil.getAllFieldsWithAnnotation(this.getClass(), Setup.class);
 
 		for (Field field : optionFields) {
 			field.setAccessible(true);
 
 			if (field.getAnnotation(Encrypted.class) != null) {
-				if (field.getType() != String.class) {
-					throw new StorageException("Invalid use of Encrypted annotation: Only strings can be encrypted/decrypted");
-				}
-
-				ByteArrayInputStream encryptedInputStream = new ByteArrayInputStream(StringUtil.fromHex((String) field.get(this)));
-				SaltedSecretKey privateKey = UserConfigTO.load(UserConfig.getUserConfigFile()).getConfigEncryptionKey();
-				byte[] decryptedBytes = CipherUtil.decrypt(encryptedInputStream, privateKey);
-				field.set(this, new String(decryptedBytes)); // the field's now decrypted
+				decryptField(field);				
 			}
 		}
-
-		logger.log(Level.FINE, "Decrypted transfer setting values");
 	}
-	
-	private String findPluginId() {
-		String camelCasePluginId = getClass().getSimpleName().replace(TransferSettings.class.getSimpleName(), "");
-		String pluginId = StringUtil.toSnakeCase(camelCasePluginId);
+
+	private void decryptField(Field field) throws Exception {
+		logger.log(Level.INFO, "Decrypting field " + field + " ...");
 		
-		return pluginId;
+		if (field.getType() != String.class) {
+			throw new StorageException("Invalid use of Encrypted annotation: Only strings can be encrypted/decrypted");
+		}
+
+		String fieldEncryptedHexStr = (String) field.get(this);
+		byte[] fieldEncryptedBytes = StringUtil.fromHex(fieldEncryptedHexStr);				
+		byte[] fieldDecryptedBytes = CipherUtil.decrypt(new ByteArrayInputStream(fieldEncryptedBytes), UserConfig.getConfigEncryptionKey());
+		
+		field.set(this, new String(fieldDecryptedBytes)); // The field is now decrypted
+	}
+
+	private String findPluginId() {
+		Class<? extends TransferPlugin> transferPluginClass = TransferPluginUtil.getTransferPluginClass(this.getClass());
+
+		try {
+			if (transferPluginClass != null) {
+				return transferPluginClass.newInstance().getId();
+			}
+
+			throw new RuntimeException("Unable to read type: No TransferPlugin is defined for these settings");
+		}
+		catch (Exception e) {
+			logger.log(Level.SEVERE, "Unable to read type: No TransferPlugin is defined for these settings", e);
+			throw new RuntimeException("Unable to read type: No TransferPlugin is defined for these settings", e);
+		}
 	}
 
 	@Override
