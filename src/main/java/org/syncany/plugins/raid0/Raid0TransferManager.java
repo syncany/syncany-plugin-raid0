@@ -33,7 +33,7 @@ import org.syncany.plugins.transfer.files.RemoteFile;
 import org.syncany.plugins.transfer.files.TempRemoteFile;
 
 /**
- * Transfer manager for the {@link Raid0Plugin}. 
+ * Transfer manager for the {@link Raid0TransferPlugin}. 
  * 
  * <p>Based on the two {@link TransferSettings} objects held inside of
  * {@link Raid0TransferSettings}, this transfer manager creates two other

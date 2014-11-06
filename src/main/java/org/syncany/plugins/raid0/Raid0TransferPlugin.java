@@ -17,10 +17,7 @@
  */
 package org.syncany.plugins.raid0;
 
-import org.syncany.config.Config;
-import org.syncany.plugins.transfer.StorageException;
 import org.syncany.plugins.transfer.TransferPlugin;
-import org.syncany.plugins.transfer.TransferSettings;
 
 /**
  * RAID0-like storage {@link TransferPlugin} for Syncany.
@@ -37,18 +34,8 @@ import org.syncany.plugins.transfer.TransferSettings;
  * 
  * @author Philipp C. Heckel <philipp.heckel@gmail.com>
  */
-public class Raid0Plugin extends TransferPlugin {
-	public Raid0Plugin() {
+public class Raid0TransferPlugin extends TransferPlugin {
+	public Raid0TransferPlugin() {
 		super("raid0");
-	}
-
-	@Override
-	public Raid0TransferSettings createEmptySettings() throws StorageException {
-		return new Raid0TransferSettings();
-	}
-
-	@Override
-	public Raid0TransferManager createTransferManager(TransferSettings transferSettings, Config config) throws StorageException {
-		return new Raid0TransferManager((Raid0TransferSettings) transferSettings, config);
 	}
 }

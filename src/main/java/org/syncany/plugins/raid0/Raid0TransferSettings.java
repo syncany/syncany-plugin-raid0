@@ -18,8 +18,8 @@
 package org.syncany.plugins.raid0;
 
 import org.simpleframework.xml.Element;
-import org.syncany.plugins.transfer.PluginOptionCallback;
 import org.syncany.plugins.transfer.Setup;
+import org.syncany.plugins.transfer.TransferPluginOptionCallback;
 import org.syncany.plugins.transfer.TransferSettings;
 
 /**
@@ -30,11 +30,11 @@ import org.syncany.plugins.transfer.TransferSettings;
 public class Raid0TransferSettings extends TransferSettings {	
 	@Element(name = "storage1", required = true)
 	@Setup(order = 1, description = "First storage settings", callback = ExplainRaid0PluginPluginOptionCallback.class)
-	public TransferSettings storage1;
+	private TransferSettings storage1;
 
 	@Element(name = "storage2", required = true)
 	@Setup(order = 2, description = "Second storage settings")
-	public TransferSettings storage2;
+	private TransferSettings storage2;
 
 	public TransferSettings getTransferSettings1() {
 		return storage1;
@@ -44,10 +44,18 @@ public class Raid0TransferSettings extends TransferSettings {
 		return storage2;
 	}
 	
-	public static class ExplainRaid0PluginPluginOptionCallback implements PluginOptionCallback {
+	public static class ExplainRaid0PluginPluginOptionCallback implements TransferPluginOptionCallback {
 		@Override
 		public String preQueryCallback() {			
-			return "The RAID0 plugin uses two backend storages to store its data.\nYou'll be asked to choose two other plugins. These plugins\nwill be used to store your data.";
+			return 
+					  "The RAID0 plugin uses two backend storages to store its data.\n"
+					+ "You'll be asked to choose two other plugins. These plugins\n"
+					+ "will be used to store your data.";
+		}
+
+		@Override
+		public String postQueryCallback(String optionValue) {
+			return "";
 		}		
 	}
 }
