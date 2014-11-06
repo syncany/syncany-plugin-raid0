@@ -55,7 +55,7 @@ public class Raid0TransferSettings extends TransferSettings {
 
 		@Override
 		public String postQueryCallback(String optionValue) {
-			return "";
+			return null;
 		}		
 	}
 }
