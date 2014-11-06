@@ -15,25 +15,21 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.syncany.cli.init;
+package org.syncany.plugins.transfer;
 
 import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 
-import org.syncany.plugins.transfer.PluginOptionCallback;
-import org.syncany.plugins.transfer.Setup;
-import org.syncany.plugins.transfer.TransferSettings;
-
 /**
  * A plugin option represents a single setting of a transfer plugin
  * within the corresponding {@link TransferSettings} class. A plugin option
- * is created during the initialization from the {@link Setup} annotation 
- * to aid the guided repository setup (init and connect). 
- * 
+ * is created during the initialization from the {@link Setup} annotation
+ * to aid the guided repository setup (init and connect).
+ *
  * @author Christian Roth <christian.roth@port17.de>
  */
-public class PluginOption {
+public class TransferPluginOption {
 	public enum ValidationResult {
 		VALID, INVALID_TYPE, INVALID_NOT_SET
 	}
@@ -45,10 +41,11 @@ public class PluginOption {
 	private final boolean encrypted;
 	private final boolean sensitive;
 	private final boolean required;
-	private final Class<? extends PluginOptionCallback> callback;
+	private final Class<? extends TransferPluginOptionCallback> callback;
+	private final Class<? extends TransferPluginOptionConverter> converter;
 
-	public PluginOption(Field field, String name, String description, Type type, boolean encrypted, boolean sensitive, boolean required,
-			Class<? extends PluginOptionCallback> callback) {
+	public TransferPluginOption(Field field, String name, String description, Type type, boolean encrypted, boolean sensitive, boolean required,
+			Class<? extends TransferPluginOptionCallback> callback, Class<? extends TransferPluginOptionConverter> converter) {
 
 		this.field = field;
 		this.name = name;
@@ -58,6 +55,7 @@ public class PluginOption {
 		this.sensitive = sensitive;
 		this.required = required;
 		this.callback = callback;
+		this.converter = converter;
 	}
 
 	public Field getField() {
@@ -88,11 +86,15 @@ public class PluginOption {
 		return required;
 	}
 
-	public Class<? extends PluginOptionCallback> getCallback() {
+	public Class<? extends TransferPluginOptionCallback> getCallback() {
 		return callback;
 	}
 
-	public PluginOption.ValidationResult isValid(String value) {
+	public Class<? extends TransferPluginOptionConverter> getConverter() {
+		return converter;
+	}
+
+	public ValidationResult isValid(String value) {
 		if (!validateInputMandatory(value)) {
 			return ValidationResult.INVALID_NOT_SET;
 		}

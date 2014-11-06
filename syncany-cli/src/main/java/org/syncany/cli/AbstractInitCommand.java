@@ -17,6 +17,34 @@
  */
 package org.syncany.cli;
 
+import com.google.common.base.Predicate;
+import com.google.common.base.Strings;
+import com.google.common.collect.Iterables;
+
+import joptsimple.OptionSet;
+import joptsimple.OptionSpec;
+
+import org.syncany.cli.util.InitConsole;
+import org.syncany.config.to.ConfigTO;
+import org.syncany.crypto.CipherUtil;
+import org.syncany.operations.init.GenlinkOperationResult;
+import org.syncany.plugins.Plugins;
+import org.syncany.plugins.UserInteractionListener;
+import org.syncany.plugins.transfer.NestedTransferPluginOption;
+import org.syncany.plugins.transfer.TransferPluginOptionCallback;
+import org.syncany.plugins.transfer.TransferPluginOptionConverter;
+import org.syncany.plugins.transfer.TransferPluginOptions;
+import org.syncany.plugins.transfer.StorageException;
+import org.syncany.plugins.transfer.StorageTestResult;
+import org.syncany.plugins.transfer.TransferPlugin;
+import org.syncany.plugins.transfer.TransferPluginOption;
+import org.syncany.plugins.transfer.TransferPluginUtil;
+import org.syncany.plugins.transfer.TransferSettings;
+import org.syncany.plugins.transfer.TransferPluginOption.ValidationResult;
+import org.syncany.util.ReflectionUtil;
+import org.syncany.util.StringUtil;
+import org.syncany.util.StringUtil.StringJoinListener;
+
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -25,43 +53,17 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
-
-import org.syncany.cli.init.NestedPluginOption;
-import org.syncany.cli.init.PluginOption;
-import org.syncany.cli.init.PluginOptions;
-import org.syncany.cli.init.PluginOption.ValidationResult;
-import org.syncany.cli.util.InitConsole;
-import org.syncany.config.to.ConfigTO;
-import org.syncany.crypto.CipherUtil;
-import org.syncany.operations.init.GenlinkOperationResult;
-import org.syncany.plugins.Plugins;
-import org.syncany.plugins.UserInteractionListener;
-import org.syncany.plugins.transfer.PluginOptionCallback;
-import org.syncany.plugins.transfer.StorageException;
-import org.syncany.plugins.transfer.StorageTestResult;
-import org.syncany.plugins.transfer.TransferPlugin;
-import org.syncany.plugins.transfer.TransferSettings;
-import org.syncany.util.ReflectionUtil;
-import org.syncany.util.StringUtil;
-import org.syncany.util.StringUtil.StringJoinListener;
-
-import com.google.common.base.Predicate;
-import com.google.common.base.Strings;
-import com.google.common.collect.Iterables;
-
 /**
  * The abstract init command provides multiple shared methods for the 'init'
- * and 'connect' command. Both commands must provide the ability to 
- * query a user for transfer settings or parse settings from the command line 
- * 
+ * and 'connect' command. Both commands must provide the ability to
+ * query a user for transfer settings or parse settings from the command line
+ *
  * @author Philipp C. Heckel <philipp.heckel@gmail.com>
  * @author Christian Roth <christian.roth@port17.de>
  */
 public abstract class AbstractInitCommand extends Command implements UserInteractionListener {
 	private static final Logger logger = Logger.getLogger(AbstractInitCommand.class.getName());
-	
+
 	private static final char NESTED_OPTIONS_SEPARATOR = '.';
 	private static final String GENERIC_PLUGIN_TYPE_IDENTIFIER = ":type";
 	private static final int PASSWORD_MIN_LENGTH = 10;
@@ -101,7 +103,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 		isInteractive = !options.has(optionPlugin) && knownPluginSettings.size() == 0;
 
 		plugin = options.has(optionPlugin) ? initPlugin(options.valueOf(optionPlugin)) : askPlugin();
-		transferSettings = askPluginSettings(plugin, plugin.createEmptySettings(), knownPluginSettings);
+		transferSettings = askPluginSettings(plugin.createEmptySettings(), knownPluginSettings);
 
 		return transferSettings;
 	}
@@ -133,7 +135,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 		return plugin;
 	}
 
-	private TransferSettings askPluginSettings(TransferPlugin plugin, TransferSettings settings, Map<String, String> knownPluginSettings) throws StorageException {
+	private TransferSettings askPluginSettings(TransferSettings settings, Map<String, String> knownPluginSettings) throws StorageException {
 		if (isInteractive) {
 			out.println();
 			out.println("Connection details for " + settings.getType() + " connection:");
@@ -143,19 +145,20 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 		}
 
 		try {
-			List<PluginOption> pluginOptions = PluginOptions.getOrderedOptions(settings.getClass());
+			List<TransferPluginOption> pluginOptions = TransferPluginOptions.getOrderedOptions(settings.getClass());
 
-			for (PluginOption option : pluginOptions) {
-				askPluginSettings(plugin, settings, option, knownPluginSettings, "");
+			for (TransferPluginOption option : pluginOptions) {
+				askPluginSettings(settings, option, knownPluginSettings, "");
 			}
 		}
 		catch (InstantiationException | IllegalAccessException e) {
-			throw new RuntimeException("Unable to execute option generator: " + e.getMessage(), e);
+			logger.log(Level.SEVERE, "Unable to execute option generator", e);
+			throw new RuntimeException("Unable to execute option generator: " + e.getMessage());
 		}
 
 		if (!settings.isValid()) {
 			if (askRetryInvalidSettings(settings.getReasonForLastValidationFail())) {
-				return askPluginSettings(plugin, settings, knownPluginSettings);
+				return askPluginSettings(settings, knownPluginSettings);
 			}
 			
 			throw new StorageException("Validation failed: " + settings.getReasonForLastValidationFail());
@@ -166,26 +169,28 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 		return settings;
 	}
 
-	private void askPluginSettings(TransferPlugin plugin, TransferSettings settings, PluginOption option, Map<String, String> knownPluginSettings, String nestPrefix)
+	private void askPluginSettings(TransferSettings settings, TransferPluginOption option, Map<String, String> knownPluginSettings, String nestPrefix)
 			throws IllegalAccessException, InstantiationException, StorageException {
 
-		if (option instanceof NestedPluginOption) {
+		if (option instanceof NestedTransferPluginOption) {
 			if (ReflectionUtil.getClassFromType(option.getType()).equals(TransferSettings.class)) {
-				askGenericPluginSettings(plugin, settings, option, knownPluginSettings, nestPrefix);
+				askGenericPluginSettings(settings, option, knownPluginSettings, nestPrefix);
 			}
 			else {
-				askNestedPluginSettings(plugin, settings, (NestedPluginOption) option, knownPluginSettings, nestPrefix);
+				askNestedPluginSettings(settings, (NestedTransferPluginOption) option, knownPluginSettings, nestPrefix);
 			}
 		}
 		else {
-			askNormalPluginSettings(plugin, settings, option, knownPluginSettings, nestPrefix);
+			askNormalPluginSettings(settings, option, knownPluginSettings, nestPrefix);
 		}
 	}
 
-	private void askNormalPluginSettings(TransferPlugin plugin, TransferSettings settings, PluginOption option, Map<String, String> knownPluginSettings, String nestPrefix)
+	private void askNormalPluginSettings(TransferSettings settings, TransferPluginOption option, Map<String, String> knownPluginSettings, String nestPrefix)
 			throws StorageException, InstantiationException, IllegalAccessException {
 
-		Class<? extends PluginOptionCallback> optionCallbackClass = option.getCallback();
+		Class<? extends TransferPluginOptionCallback> optionCallbackClass = option.getCallback();
+		TransferPluginOptionCallback optionCallback = optionCallbackClass != null ? optionCallbackClass.newInstance() : null;
+		Class<? extends TransferPluginOptionConverter> optionConverterClass = option.getConverter();
 
 		if (!isInteractive && !knownPluginSettings.containsKey(nestPrefix + option.getName())) {
 			throw new IllegalArgumentException("Missing plugin option (" + nestPrefix + option.getName() + ") in non-interactive mode.");
@@ -194,36 +199,38 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 			settings.setField(option.getField().getName(), knownPluginSettings.get(nestPrefix + option.getName()));
 		}
 		else {
-			if (optionCallbackClass != null) {
-				out.println(optionCallbackClass.newInstance().preQueryCallback());
+			if (optionCallback != null) {
+				out.println(optionCallback.preQueryCallback());
 			}
 
 			String optionValue = askPluginOption(settings, option);
+
+			if (optionConverterClass != null) {
+				optionValue = optionConverterClass.newInstance().convert(optionValue);
+			}
+
 			settings.setField(option.getField().getName(), optionValue);
+
+			if (optionCallback != null) {
+				out.println(optionCallback.postQueryCallback(optionValue));
+			}
 		}
 	}
 
-	private void askGenericPluginSettings(TransferPlugin plugin, TransferSettings settings, PluginOption option, Map<String, String> knownPluginSettings, String nestPrefix)
+	private void askGenericPluginSettings(TransferSettings settings, TransferPluginOption option, Map<String, String> knownPluginSettings, String nestPrefix)
 			throws StorageException, IllegalAccessException, InstantiationException {
 
 		if (isInteractive) {
-			Class<? extends PluginOptionCallback> optionCallbackClass = option.getCallback();
-			
-			if (optionCallbackClass != null) {
-				out.println();
-				out.println(optionCallbackClass.newInstance().preQueryCallback());
-			}
-			
 			out.println();
 			out.println(option.getDescription() + ":");
 		}
 
 		TransferPlugin childPlugin = null;
+		Class<? extends TransferPlugin> pluginClass = TransferPluginUtil.getTransferPluginClass(settings.getClass());
 
 		// Non-interactive: Plugin settings might be given via command line
 		try {
-			String childPluginId = knownPluginSettings.get(nestPrefix + option.getName() + GENERIC_PLUGIN_TYPE_IDENTIFIER);
-			childPlugin = initPlugin(childPluginId);
+			childPlugin = initPlugin(knownPluginSettings.get(nestPrefix + option.getName() + GENERIC_PLUGIN_TYPE_IDENTIFIER));
 		}
 		catch (Exception e) {
 			if (!isInteractive) {
@@ -234,25 +241,25 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 
 		// Interactive mode: Ask for sub-plugin
 		while (childPlugin == null) {
-			childPlugin = askPlugin(plugin.getClass());
+			childPlugin = askPlugin(pluginClass);
 		}
-		
+
 		if (isInteractive) {
 			out.println();
 		}
 
 		// Create nested/child settings
 		TransferSettings childSettings = childPlugin.createEmptySettings();
-		
+
 		settings.setField(option.getField().getName(), childSettings);
 		nestPrefix = nestPrefix + option.getName() + NESTED_OPTIONS_SEPARATOR;
 
-		for (PluginOption nestedOption : PluginOptions.getOrderedOptions(childSettings.getClass())) {
-			askPluginSettings(plugin, childSettings, nestedOption, knownPluginSettings, nestPrefix);
+		for (TransferPluginOption nestedOption : TransferPluginOptions.getOrderedOptions(childSettings.getClass())) {
+			askPluginSettings(childSettings, nestedOption, knownPluginSettings, nestPrefix);
 		}
 	}
 
-	private void askNestedPluginSettings(TransferPlugin plugin, TransferSettings settings, NestedPluginOption option, Map<String, String> knownPluginSettings,
+	private void askNestedPluginSettings(TransferSettings settings, NestedTransferPluginOption option, Map<String, String> knownPluginSettings,
 			String nestPrefix) throws StorageException, IllegalAccessException, InstantiationException {
 
 		if (isInteractive) {
@@ -260,7 +267,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 			out.println(option.getDescription() + ":");
 		}
 
-		for (PluginOption nestedPluginOption : option.getOptions()) {
+		for (TransferPluginOption nestedPluginOption : option.getOptions()) {
 			Class<?> nestedTransferSettingsClass = ReflectionUtil.getClassFromType(option.getType());
 
 			if (nestedTransferSettingsClass == null) {
@@ -272,11 +279,11 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 			settings.setField(option.getField().getName(), nestedSettings);
 			nestPrefix = nestPrefix + option.getName() + NESTED_OPTIONS_SEPARATOR;
 
-			askPluginSettings(plugin, nestedSettings, nestedPluginOption, knownPluginSettings, nestPrefix);
+			askPluginSettings(nestedSettings, nestedPluginOption, knownPluginSettings, nestPrefix);
 		}
 	}
 
-	private String askPluginOption(TransferSettings settings, PluginOption option) throws StorageException {
+	private String askPluginOption(TransferSettings settings, TransferPluginOption option) throws StorageException {
 		while (true) {
 			String value;
 
@@ -321,7 +328,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 		}
 	}
 
-	private String askPluginOptionNormal(TransferSettings settings, PluginOption option) throws StorageException {
+	private String askPluginOptionNormal(TransferSettings settings, TransferPluginOption option) throws StorageException {
 		String knownOptionValue = settings.getField(option.getField().getName());
 		String value = knownOptionValue;
 
@@ -341,7 +348,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 		return value;
 	}
 
-	private String askPluginOptionOptional(TransferSettings settings, PluginOption option) throws StorageException {
+	private String askPluginOptionOptional(TransferSettings settings, TransferPluginOption option) throws StorageException {
 		String knownOptionValue = settings.getField(option.getField().getName());
 		String value = knownOptionValue;
 
@@ -361,7 +368,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 		return value;
 	}
 
-	private String askPluginOptionSensitive(TransferSettings settings, PluginOption option) throws StorageException {
+	private String askPluginOptionSensitive(TransferSettings settings, TransferPluginOption option) throws StorageException {
 		String knownOptionValue = settings.getField(option.getField().getName());
 		String value = knownOptionValue;
 		String optionalIndicator = option.isRequired() ? "" : ", optional";
@@ -385,7 +392,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 	protected TransferPlugin askPlugin() {
 		return askPlugin(null);
 	}
-	
+
 	protected TransferPlugin askPlugin(final Class<? extends TransferPlugin> ignoreTransferPluginClass) {
 		TransferPlugin plugin = null;
 		final List<TransferPlugin> plugins = Plugins.list(TransferPlugin.class);
@@ -414,7 +421,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 			if (plugin == null || ignoreTransferPluginClass == plugin.getClass()) {
 				out.println("ERROR: Plugin does not exist or cannot be used.");
 				out.println();
-				
+
 				plugin = null;
 			}
 		}
@@ -440,8 +447,7 @@ public abstract class AbstractInitCommand extends Command implements UserInterac
 
 	protected TransferSettings updateTransferSettings(TransferSettings transferSettings) throws StorageException {
 		try {
-			TransferPlugin plugin = Plugins.get(transferSettings.getType(), TransferPlugin.class);
-			return askPluginSettings(plugin, transferSettings, new HashMap<String, String>());
+			return askPluginSettings(transferSettings, new HashMap<String, String>());
 		}
 		catch (Exception e) {
 			logger.log(Level.SEVERE, "Unable to reload old plugin settings", e);

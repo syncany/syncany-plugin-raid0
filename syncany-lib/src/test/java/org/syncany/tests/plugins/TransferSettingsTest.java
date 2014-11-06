@@ -18,6 +18,7 @@
 package org.syncany.tests.plugins;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -35,9 +36,11 @@ import org.syncany.config.Config;
 import org.syncany.config.to.ConfigTO;
 import org.syncany.plugins.Plugins;
 import org.syncany.plugins.dummy.DummyTransferManager;
+import org.syncany.plugins.dummy.DummyTransferPlugin;
 import org.syncany.plugins.dummy.DummyTransferSettings;
 import org.syncany.plugins.local.LocalTransferSettings;
 import org.syncany.plugins.transfer.TransferPlugin;
+import org.syncany.plugins.transfer.TransferPluginUtil;
 import org.syncany.plugins.transfer.TransferSettings;
 import org.syncany.tests.util.TestConfigUtil;
 
@@ -92,15 +95,14 @@ public class TransferSettingsTest {
 		TransferSettings tsRestored = confRestored.getTransferSettings();
 		assertNotNull(tsRestored);
 
-		DummyTransferManager transferManager = (DummyTransferManager) plugin.createTransferManager(tsRestored, config);
+		DummyTransferManager transferManager = plugin.createTransferManager(tsRestored, config);
 		assertNotNull(transferManager);
 	}
 
 	@Test
 	public void createNewValidConnectionTO() throws Exception {
-
 		TransferPlugin p = Plugins.get("dummy", TransferPlugin.class);
-		DummyTransferSettings ts = (DummyTransferSettings) p.createEmptySettings();
+		DummyTransferSettings ts = p.createEmptySettings();
 		ts.foo = "foo-value";
 		ts.number = 5;
 
@@ -108,16 +110,23 @@ public class TransferSettingsTest {
 	}
 
 	@Test
-	public void testDeserializeCorrectClass() throws Exception {
+	public void createNewInvalidConnectionTO() throws Exception {
+		TransferPlugin p = Plugins.get("dummy", TransferPlugin.class);
+		DummyTransferSettings ts = p.createEmptySettings();
 
+		assertFalse(ts.isValid());
+	}
+
+	@Test
+	public void testDeserializeCorrectClass() throws Exception {
 		Serializer serializer = new Persister();
-		// allways LocalTransferSettings
+
+		// Always LocalTransferSettings
 		serializer.write(TestConfigUtil.createTestInitOperationOptions("syncanytest").getConfigTO(), tmpFile);
 
 		ConfigTO confRestored = ConfigTO.load(tmpFile);
 
 		assertEquals(LocalTransferSettings.class, confRestored.getTransferSettings().getClass());
-
 	}
 
 	@Test(expected = ElementException.class)
@@ -129,7 +138,13 @@ public class TransferSettingsTest {
 		Serializer serializer = new Persister();
 		serializer.write(lts, tmpFile);
 
-		// boom
-		DummyTransferSettings settings = serializer.read(DummyTransferSettings.class, tmpFile);
+		// This shouldn't blow up!
+		serializer.read(DummyTransferSettings.class, tmpFile);
+	}
+
+	@Test
+	public void testGetSettingsAndManagerFromPlugin() throws Exception {
+		Class<? extends TransferSettings> settingsClass = TransferPluginUtil.getTransferSettingsClass(DummyTransferPlugin.class);
+		assertEquals(DummyTransferSettings.class, settingsClass);
 	}
 }

@@ -1,6 +1,6 @@
 /*
  * Syncany, www.syncany.org
- * Copyright (C) 2011-2014 Philipp C. Heckel <philipp.heckel@gmail.com>
+ * Copyright (C) 2011-2014 Philipp C. Heckel <philipp.heckel@gmail.com> 
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,20 +15,37 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.syncany.plugins.transfer;
+package org.syncany.operations.daemon;
 
-/**
- * Option callbacks are called during initialization and before the 
- * corresponding setting is queried.
- *
- * @see org.syncany.cli.init.PluginOptions
- * @author Christian Roth <christian.roth@port17.de>
- */
-public interface PluginOptionCallback {
-	/**
-	 * Called before a setting value is queried.
-	 *
-	 * @return The message to display.
-	 */
-	public String preQueryCallback();
+import java.io.File;
+
+import org.simpleframework.xml.Element;
+
+public class Watch {
+	public enum SyncStatus {
+		IN_SYNC, SYNCING
+	}
+	
+	@Element(name = "folder", required = true)
+	private File folder;
+	
+	@Element(name = "status", required = true)
+	private SyncStatus status;
+
+	public Watch() {
+		// Nothing.
+	}
+	
+	public Watch(File folder, SyncStatus status) {
+		this.folder = folder;
+		this.status = status;
+	}
+
+	public File getFolder() {
+		return folder;
+	}
+
+	public SyncStatus getStatus() {
+		return status;
+	}
 }
